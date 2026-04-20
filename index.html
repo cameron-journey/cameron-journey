@@ -1,7 +1,397 @@
-Last login: Mon Apr 20 17:09:36 on ttys000
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Cameron Journey"/>
+  <meta name="theme-color" content="#0f1f4a"/>
+  <title>Cameron Journey</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#fdf8f0;font-family:'Nunito','Trebuchet MS',sans-serif;-webkit-tap-highlight-color:transparent;}
+    @keyframes fadeIn  {from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+    @keyframes slideUp {from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+    @keyframes shimmer {0%{transform:translateX(-100%);}100%{transform:translateX(200%);}}
+    .tog-btn:hover{transform:translateY(-2px);box-shadow:0 5px 16px rgba(15,31,74,0.18);}
+    .tab-btn:hover{opacity:0.82;}
+    input[type=date]::-webkit-calendar-picker-indicator{opacity:0.5;cursor:pointer;}
+    select option{background:#fffef9;color:#0a1628;}
+    input::placeholder{color:#7a98bc;}
+    input,select,button{font-family:'Nunito','Trebuchet MS',sans-serif;}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
 
-The default interactive shell is now zsh.
-To update your account to use zsh, please run `chsh -s /bin/zsh`.
-For more details, please visit https://support.apple.com/kb/HT208050.
-yamamuramasakononotobukkukonpyuta-2:~ masakoyamamura$ cat ~/Downloads/index.html | pbcopy
-yamamuramasakononotobukkukonpyuta-2:~ masakoyamamura$ 
+const STORAGE_KEY = "cameron-tracker-data";
+const initialState = { logs: [], measurements: [], startDate: new Date().toISOString().split("T")[0] };
+const CAMERON_WAIST = 58.5;
+const USER_START_WAIST = 78;
+const STEP_GOAL = 8000;
+
+const C = {
+  bg:"#fdf8f0", bgCard:"#fffef9", bgCardAlt:"#f0e8d8", bgActive:"#ddeaf8",
+  border:"#1a2e5a", borderLight:"rgba(26,46,90,0.22)",
+  navy:"#0f1f4a", navyMid:"#1a3570", navyLight:"#ddeaf8",
+  text:"#0a1628", textMid:"#1a3570", textDim:"#3a5c8a", textFaint:"#7a98bc",
+  tagBg:"#cddff5", tagText:"#0f1f4a", tagBorder:"#1a3570",
+  alcoTagBg:"#fdeaee", alcoTagText:"#7a0e2a", alcoTagBdr:"#c0305a",
+  coral:"#c8400a", mint:"#0e6b4a", amber:"#a05000",
+  shadow:"0 3px 18px rgba(15,31,74,0.18)", shadowSm:"0 1px 8px rgba(15,31,74,0.10)",
+};
+
+const ENCOURAGEMENT_POOL = [
+  "3日連続トレーニング達成🌊 キャメロンも「毎日続けることが大切」と語っていました。あなたは今、その道を歩んでいます！",
+  "今週のお酒、控えめですね🍃 腹部まわりの脂肪はアルコールと深く関係しています。この調子でいきましょう！",
+  "プロテインの記録が続いています💪 筋肉はタンパク質から生まれます。3年後の体が今日作られています。",
+  "ウエストが細くなってきています📏 チャーリーズエンジェルズのキャメロン、ウエスト58.5cmまで一歩ずつ！",
+  "60歳を目前に体を作り直す——それはとても勇気のあること。キャメロンの言葉：「年齢は言い訳にならない」✨",
+  "続けることが、唯一の近道。今日の記録が3年後の自分への手紙になります✉️",
+  "ヨガ＋体幹トレーニングの組み合わせは最高✨ 柔軟性と筋力の両方を育てるキャメロン式アプローチ、実践中！",
+];
+
+const STRENGTH_EXERCISES = [
+  {key:"kettlebell",label:"🏋️ ケトルベル",desc:"全身・代謝UP"},
+  {key:"plank",label:"🧱 プランク",desc:"体幹・腹横筋"},
+  {key:"abroller",label:"⚙️ 腹筋ローラー",desc:"腹直筋・体幹"},
+  {key:"birddog",label:"🐦 バードドッグ",desc:"体幹・脊柱安定"},
+];
+const ALCOHOL_TYPES = ["ビール","ワイン","日本酒","焼酎","ハイボール","カクテル","その他"];
+const TABS = [{id:"log",label:"📝 記録"},{id:"measure",label:"📏 サイズ"},{id:"graphs",label:"📊 グラフ"},{id:"history",label:"🗓 履歴"}];
+
+function loadData(){try{const r=localStorage.getItem(STORAGE_KEY);return r?JSON.parse(r):initialState;}catch{return initialState;}}
+function saveData(d){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{}}
+
+function App(){
+  const [data,setData]=useState(loadData);
+  const [tab,setTab]=useState("log");
+  const [form,setForm]=useState({date:new Date().toISOString().split("T")[0],yoga:false,steps:"",kettlebell:false,plank:false,abroller:false,birddog:false,protein:false,alcohol:false,alcoholType:"ワイン",alcoholCups:"1",mood:"3"});
+  const [mForm,setMForm]=useState({date:new Date().toISOString().split("T")[0],weight:"",waist:"",bust:"",hip:""});
+  const [saved,setSaved]=useState(false);
+  const [toast,setToast]=useState(null);
+  const [bounce,setBounce]=useState(false);
+  const canvasRef=useRef(null);
+  const waistCanvasRef=useRef(null);
+  const stepsCanvasRef=useRef(null);
+
+  useEffect(()=>{saveData(data);},[data]);
+  useEffect(()=>{if(tab==="graphs")setTimeout(()=>{drawEx();drawWaist();drawSteps();},80);},[tab,data]);
+
+  const hasStr=l=>l.kettlebell||l.plank||l.abroller||l.birddog;
+  const hasEx=l=>l.yoga||(l.steps&&parseInt(l.steps)>0)||hasStr(l);
+
+  function countStreak(logs){
+    const s=[...logs].sort((a,b)=>b.date.localeCompare(a.date));
+    let streak=0,prev=null;
+    for(const l of s){
+      if(!hasEx(l))continue;
+      if(!prev){streak=1;prev=l.date;continue;}
+      if((new Date(prev)-new Date(l.date))/86400000===1){streak++;prev=l.date;}else break;
+    }
+    return streak;
+  }
+
+  function maybeToast(d){
+    if(Math.random()>0.22)return;
+    const r=d.logs.slice(-7),s=countStreak(d.logs);
+    let m;
+    if(s>=3)m=ENCOURAGEMENT_POOL[0];
+    else if(r.filter(l=>!l.alcohol).length>=4)m=ENCOURAGEMENT_POOL[1];
+    else if(r.filter(l=>l.protein).length>=5)m=ENCOURAGEMENT_POOL[2];
+    else{const p=[3,4,5,6];m=ENCOURAGEMENT_POOL[p[Math.floor(Math.random()*p.length)]];}
+    setToast(m);setTimeout(()=>setToast(null),9000);
+  }
+
+  function submitLog(){
+    const nd={...data,logs:[...data.logs.filter(l=>l.date!==form.date),{...form,id:Date.now()}]};
+    setData(nd);flash();maybeToast(nd);setBounce(true);setTimeout(()=>setBounce(false),600);
+  }
+  function submitMeasure(){
+    if(!mForm.weight&&!mForm.waist)return;
+    setData(p=>({...p,measurements:[...p.measurements.filter(m=>m.date!==mForm.date),{...mForm,id:Date.now()}]}));
+    flash();
+  }
+  function flash(){setSaved(true);setTimeout(()=>setSaved(false),2200);}
+
+  function getLast30(){return Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(29-i));return d.toISOString().split("T")[0];});}
+
+  function drawEx(){
+    const c=canvasRef.current;if(!c)return;
+    const ctx=c.getContext("2d"),W=c.width,H=c.height;
+    ctx.clearRect(0,0,W,H);
+    const days=getLast30(),bw=W/days.length;
+    days.forEach((day,i)=>{
+      const log=data.logs.find(l=>l.date===day),ex=log&&hasEx(log),x=i*bw;
+      ctx.fillStyle=ex?C.navy:"rgba(15,31,74,0.09)";
+      ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x+2,12,bw-4,H-32,4);else ctx.rect(x+2,12,bw-4,H-32);ctx.fill();
+      if(ex){ctx.fillStyle="rgba(255,255,255,0.95)";ctx.font="bold 7px sans-serif";let y=H-20;if(log.yoga){ctx.fillText("Y",x+4,y);y-=9;}if(log.kettlebell){ctx.fillText("K",x+4,y);y-=9;}if(log.plank)ctx.fillText("P",x+4,y);}
+    });
+    ctx.fillStyle=C.textDim;ctx.font="9px sans-serif";
+    days.forEach((day,i)=>{if(i%5===0)ctx.fillText(day.slice(5),i*bw+1,H);});
+  }
+
+  function drawWaist(){
+    const c=waistCanvasRef.current;if(!c)return;
+    const ctx=c.getContext("2d"),W=c.width,H=c.height;
+    ctx.clearRect(0,0,W,H);
+    const ms=[...data.measurements].filter(m=>m.waist).sort((a,b)=>a.date.localeCompare(b.date));
+    if(!ms.length){ctx.fillStyle=C.textDim;ctx.font="13px sans-serif";ctx.fillText("サイズを記録するとグラフが表示されます",W/2-140,H/2);return;}
+    const vals=ms.map(m=>parseFloat(m.waist));
+    const minV=Math.min(...vals,CAMERON_WAIST)-2,maxV=Math.max(...vals,USER_START_WAIST)+2;
+    const pL=40,pR=16,pT=18,pB=24,gW=W-pL-pR,gH=H-pT-pB;
+    const tx=i=>pL+(i/Math.max(ms.length-1,1))*gW,ty=v=>pT+(1-(v-minV)/(maxV-minV))*gH;
+    ctx.strokeStyle="rgba(15,31,74,0.09)";ctx.lineWidth=1;
+    for(let v=Math.ceil(minV);v<=Math.floor(maxV);v+=5){const y=ty(v);ctx.beginPath();ctx.moveTo(pL,y);ctx.lineTo(W-pR,y);ctx.stroke();ctx.fillStyle=C.textDim;ctx.font="9px sans-serif";ctx.fillText(v,2,y+3);}
+    ctx.strokeStyle=C.navyMid;ctx.setLineDash([6,4]);ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(pL,ty(CAMERON_WAIST));ctx.lineTo(W-pR,ty(CAMERON_WAIST));ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=C.navy;ctx.font="bold 9px sans-serif";ctx.fillText("Cameron 58.5★",pL+4,ty(CAMERON_WAIST)-4);
+    ctx.beginPath();ctx.moveTo(tx(0),gH+pT);ms.forEach((_,i)=>ctx.lineTo(tx(i),ty(vals[i])));ctx.lineTo(tx(ms.length-1),gH+pT);ctx.closePath();
+    const ag=ctx.createLinearGradient(0,pT,0,H);ag.addColorStop(0,"rgba(15,31,74,0.18)");ag.addColorStop(1,"rgba(15,31,74,0.01)");ctx.fillStyle=ag;ctx.fill();
+    ctx.beginPath();ms.forEach((_,i)=>{i===0?ctx.moveTo(tx(i),ty(vals[i])):ctx.lineTo(tx(i),ty(vals[i]));});ctx.strokeStyle=C.navy;ctx.lineWidth=2.5;ctx.stroke();
+    ms.forEach((_,i)=>{ctx.beginPath();ctx.arc(tx(i),ty(vals[i]),5,0,Math.PI*2);ctx.fillStyle=C.navy;ctx.fill();ctx.fillStyle="#fffef9";ctx.beginPath();ctx.arc(tx(i),ty(vals[i]),2.5,0,Math.PI*2);ctx.fill();});
+  }
+
+  function drawSteps(){
+    const c=stepsCanvasRef.current;if(!c)return;
+    const ctx=c.getContext("2d"),W=c.width,H=c.height;
+    ctx.clearRect(0,0,W,H);
+    const days=getLast30(),bw=W/days.length;
+    const maxS=Math.max(STEP_GOAL,...days.map(d=>parseInt(data.logs.find(l=>l.date===d)?.steps)||0));
+    const goalY=12+(1-STEP_GOAL/maxS)*(H-36);
+    ctx.strokeStyle=C.navyMid;ctx.setLineDash([4,3]);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,goalY);ctx.lineTo(W,goalY);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=C.navyMid;ctx.font="bold 8px sans-serif";ctx.fillText(`目標${(STEP_GOAL/1000).toFixed(0)}k`,W-28,goalY-3);
+    days.forEach((day,i)=>{
+      const log=data.logs.find(l=>l.date===day),steps=log&&log.steps?parseInt(log.steps):0,x=i*bw;
+      const ratio=steps>0?Math.min(steps/maxS,1):0,barH=ratio*(H-36);
+      ctx.fillStyle=steps===0?"rgba(15,31,74,0.07)":steps>=STEP_GOAL?C.navy:C.navyMid;
+      ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x+2,H-24-barH,bw-4,barH||2,3);else ctx.rect(x+2,H-24-barH,bw-4,barH||2);ctx.fill();
+      if(steps>0&&barH>14){ctx.fillStyle="rgba(255,255,255,0.9)";ctx.font="bold 7px sans-serif";ctx.fillText(`${Math.round(steps/1000*10)/10}k`,x+3,H-28);}
+    });
+    ctx.fillStyle=C.textDim;ctx.font="9px sans-serif";days.forEach((day,i)=>{if(i%5===0)ctx.fillText(day.slice(5),i*bw+1,H);});
+  }
+
+  const total=data.logs.length,exDays=data.logs.filter(l=>hasEx(l)).length,alDays=data.logs.filter(l=>l.alcohol).length;
+  const alFree=total>0?Math.round(((total-alDays)/total)*100):100,streak=countStreak(data.logs);
+  const latestW=data.measurements.filter(m=>m.waist).sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const wProg=latestW?Math.min(100,Math.max(0,Math.round(((USER_START_WAIST-parseFloat(latestW.waist))/(USER_START_WAIST-CAMERON_WAIST))*100))):0;
+  const todayLog=data.logs.find(l=>l.date===new Date().toISOString().split("T")[0]);
+  const todaySteps=todayLog?.steps?parseInt(todayLog.steps):null;
+
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text}}>
+      {/* Top stripe */}
+      <div style={{position:"relative",height:14,overflow:"hidden",background:C.navy}}>
+        <svg viewBox="0 0 400 14" preserveAspectRatio="none" style={{position:"absolute",bottom:0,width:"100%",height:10}}>
+          <path d="M0,8 Q50,0 100,8 Q150,16 200,8 Q250,0 300,8 Q350,16 400,8 L400,14 L0,14 Z" fill={C.bg}/>
+        </svg>
+      </div>
+
+      <div style={{maxWidth:480,margin:"0 auto",paddingBottom:90}}>
+        {/* Header */}
+        <div style={{textAlign:"center",padding:"22px 20px 14px",animation:"slideUp 0.5s ease"}}>
+          <div style={{fontSize:11,letterSpacing:"0.32em",color:C.navyMid,fontFamily:"'Fredoka',sans-serif",fontWeight:600,marginBottom:4,textTransform:"uppercase"}}>✦ Body Project 3 Years ✦</div>
+          <h1 style={{fontFamily:"'Fredoka',sans-serif",fontSize:34,fontWeight:700,margin:0,letterSpacing:"0.04em",color:C.navy,textShadow:"2px 3px 0px rgba(15,31,74,0.12)"}}>Cameron Journey</h1>
+          <div style={{fontSize:12,color:C.textDim,marginTop:4,fontStyle:"italic",letterSpacing:"0.06em"}}>toward 58.5cm — strength & grace 🌊</div>
+          {todaySteps&&<div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:10,padding:"5px 14px",background:C.navy,borderRadius:99,color:"#fff",fontSize:12,fontWeight:800}}>👟 今日 {todaySteps.toLocaleString()} 歩{todaySteps>=STEP_GOAL&&<span style={{fontSize:14}}>🎯</span>}</div>}
+        </div>
+
+        {/* Toast */}
+        {toast&&<div style={{margin:"0 20px 14px",padding:"14px 17px",background:"#e8f0fb",border:`2px solid ${C.navy}`,borderLeft:`6px solid ${C.navy}`,borderRadius:14,fontSize:13,lineHeight:1.85,color:C.text,animation:"fadeIn 0.4s ease",boxShadow:C.shadow,fontWeight:700}}><span style={{color:C.amber,fontSize:16}}>★ </span>{toast}</div>}
+
+        {/* Stats */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,padding:"0 20px 16px"}}>
+          {[{label:"連続記録🔥",value:`${streak}`,unit:"日",color:C.coral},{label:"禁酒率🍃",value:`${alFree}`,unit:"%",color:C.mint},{label:"運動日数💪",value:`${exDays}`,unit:`/${total}日`,color:C.navy}].map((s,i)=>(
+            <div key={i} style={{background:C.bgCard,border:`2px solid ${C.border}`,borderRadius:16,padding:"13px 6px",textAlign:"center",boxShadow:C.shadowSm}}>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:2}}>
+                <span style={{fontSize:26,fontWeight:900,fontFamily:"'Fredoka',sans-serif",color:s.color,lineHeight:1}}>{s.value}</span>
+                <span style={{fontSize:11,color:s.color,fontWeight:800}}>{s.unit}</span>
+              </div>
+              <div style={{fontSize:10.5,fontWeight:800,color:C.textMid,marginTop:4}}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Progress */}
+        {latestW&&<div style={{padding:"0 20px 16px"}}>
+          <div style={{background:C.bgCard,border:`2px solid ${C.border}`,borderRadius:16,padding:"14px 16px",boxShadow:C.shadowSm}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:12,color:C.navy,fontWeight:900,fontFamily:"'Fredoka',sans-serif"}}>Cameron Progress ⭐</span>
+              <span style={{fontSize:12,color:C.navy,fontWeight:900}}>{latestW.waist}㎝ → 58.5㎝</span>
+            </div>
+            <div style={{background:C.bgCardAlt,borderRadius:99,height:12,overflow:"hidden",border:`2px solid ${C.border}`}}>
+              <div style={{height:"100%",borderRadius:99,width:`${Math.max(wProg,2)}%`,background:C.navy,transition:"width 1.2s cubic-bezier(0.34,1.56,0.64,1)",position:"relative",overflow:"hidden"}}>
+                <div style={{position:"absolute",inset:0,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)",animation:"shimmer 2.5s infinite"}}/>
+              </div>
+            </div>
+            <div style={{fontSize:11,color:C.textDim,marginTop:7,textAlign:"right",fontWeight:800}}>{wProg}% of the way there 🎯</div>
+          </div>
+        </div>}
+
+        {/* Tabs */}
+        <div style={{display:"flex",padding:"0 20px 20px",gap:7}}>
+          {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} className="tab-btn" style={{flex:1,padding:"9px 2px",cursor:"pointer",borderRadius:12,fontSize:11,fontFamily:"'Nunito',sans-serif",fontWeight:900,background:tab===t.id?C.navy:C.bgCardAlt,color:tab===t.id?"#fff":C.textMid,border:`2px solid ${tab===t.id?C.navy:C.border}`,boxShadow:tab===t.id?C.shadow:"none",transform:tab===t.id?"translateY(-2px)":"none",transition:"all 0.2s"}}>{t.label}</button>)}
+        </div>
+
+        {/* LOG */}
+        {tab==="log"&&<div style={{padding:"0 20px",animation:"slideUp 0.3s ease"}}>
+          <Sec title="📅 今日の日付"><input type="date" value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={inp()}/></Sec>
+
+          <Sec title="👟 歩数（フィットネスアプリで確認）">
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <input type="number" placeholder="例：8500" value={form.steps} onChange={e=>setForm(p=>({...p,steps:e.target.value}))} style={{...inp(),flex:1,fontSize:18,fontWeight:800,textAlign:"center",color:C.navy}}/>
+              <div style={{flexShrink:0,textAlign:"center"}}>
+                <div style={{fontSize:11,fontWeight:800,color:C.textMid}}>目標</div>
+                <div style={{fontSize:15,fontWeight:900,color:C.navy,fontFamily:"'Fredoka',sans-serif"}}>{STEP_GOAL.toLocaleString()}</div>
+              </div>
+            </div>
+            {form.steps&&<div style={{marginTop:8,padding:"7px 12px",borderRadius:10,background:parseInt(form.steps)>=STEP_GOAL?C.navy:C.bgCardAlt,border:`2px solid ${C.border}`,color:parseInt(form.steps)>=STEP_GOAL?"#fff":C.textMid,fontSize:12,fontWeight:800,textAlign:"center"}}>
+              {parseInt(form.steps)>=STEP_GOAL?`🎯 目標達成！ ${parseInt(form.steps).toLocaleString()}歩`:`あと ${(STEP_GOAL-parseInt(form.steps)).toLocaleString()}歩で目標！`}
+            </div>}
+          </Sec>
+
+          <Sec title="🏃 有酸素・ヨガ"><Tog label="🧘 ヨガ（オンライン）" active={form.yoga} onToggle={()=>setForm(p=>({...p,yoga:!p.yoga}))}/></Sec>
+
+          <Sec title="💥 筋トレ・体幹（複数OK！）">
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {STRENGTH_EXERCISES.map(ex=><Tog key={ex.key} label={ex.label} sub={ex.desc} active={form[ex.key]} onToggle={()=>setForm(p=>({...p,[ex.key]:!p[ex.key]}))}/>)}
+            </div>
+          </Sec>
+
+          <Sec title="🥗 食事 & 栄養"><Tog label="🥩 プロテイン摂取した！" active={form.protein} onToggle={()=>setForm(p=>({...p,protein:!p.protein}))}/></Sec>
+
+          <Sec title="🍷 お酒">
+            <Tog label="飲んだ〜" active={form.alcohol} onToggle={()=>setForm(p=>({...p,alcohol:!p.alcohol}))}/>
+            {form.alcohol&&<div style={{marginTop:10,display:"flex",gap:8,alignItems:"center"}}>
+              <select value={form.alcoholType} onChange={e=>setForm(p=>({...p,alcoholType:e.target.value}))} style={{...inp(),flex:2}}>
+                {ALCOHOL_TYPES.map(t=><option key={t}>{t}</option>)}
+              </select>
+              <input type="number" min="0.5" max="10" step="0.5" value={form.alcoholCups} onChange={e=>setForm(p=>({...p,alcoholCups:e.target.value}))} style={{...inp(),flex:1,textAlign:"center"}} placeholder="杯"/>
+              <span style={{color:C.text,fontSize:13,fontWeight:800,flexShrink:0}}>杯</span>
+            </div>}
+          </Sec>
+
+          <Sec title="✨ 今日の体調は？">
+            <div style={{display:"flex",gap:6}}>
+              {["😔","😐","🙂","😊","🤩"].map((e,i)=><button key={i} onClick={()=>setForm(p=>({...p,mood:String(i+1)}))} style={{flex:1,padding:"10px 0",border:"none",cursor:"pointer",borderRadius:10,fontSize:22,background:form.mood===String(i+1)?C.navyLight:C.bgCardAlt,outline:form.mood===String(i+1)?`3px solid ${C.navy}`:`2px solid ${C.border}`,transform:form.mood===String(i+1)?"scale(1.12)":"scale(1)",transition:"all 0.15s"}}>{e}</button>)}
+            </div>
+          </Sec>
+
+          <button onClick={submitLog} style={{width:"100%",padding:"15px",marginTop:6,background:C.navy,border:`2px solid ${C.navy}`,borderRadius:14,cursor:"pointer",fontSize:15,letterSpacing:"0.12em",color:"#fff",fontFamily:"'Fredoka',sans-serif",fontWeight:"600",boxShadow:C.shadow,transform:bounce?"scale(0.97)":"scale(1)",transition:"transform 0.15s"}}>
+            {saved?"✓ 記録しました！🎉":"記録する ▶"}
+          </button>
+        </div>}
+
+        {/* MEASURE */}
+        {tab==="measure"&&<div style={{padding:"0 20px",animation:"slideUp 0.3s ease"}}>
+          <div style={{fontSize:12,color:C.text,marginBottom:16,lineHeight:1.9,background:"#e8f0fb",padding:"12px 16px",borderRadius:12,border:`2px solid ${C.navy}`,fontWeight:700}}>
+            週1回の計測をおすすめします📏<br/><span style={{color:C.navy,fontFamily:"'Fredoka',sans-serif",fontSize:14}}>目標：ウエスト 58.5cm（キャメロン！）</span>
+          </div>
+          <Sec title="📅 計測日"><input type="date" value={mForm.date} onChange={e=>setMForm(p=>({...p,date:e.target.value}))} style={inp()}/></Sec>
+          <Sec title="📐 数値を入力">
+            {[{key:"weight",label:"体重",unit:"kg",ph:"60.0"},{key:"waist",label:"ウエスト",unit:"cm",ph:"78.0"},{key:"bust",label:"バスト",unit:"cm",ph:"87.0"},{key:"hip",label:"ヒップ",unit:"cm",ph:"92.0"}].map(f=>(
+              <div key={f.key} style={{marginBottom:11,display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:74,fontSize:12,color:C.text,fontWeight:900,flexShrink:0}}>{f.label}</div>
+                <input type="number" step="0.1" placeholder={f.ph} value={mForm[f.key]} onChange={e=>setMForm(p=>({...p,[f.key]:e.target.value}))} style={{...inp(),flex:1}}/>
+                <div style={{width:26,fontSize:12,color:C.textMid,fontWeight:800,flexShrink:0}}>{f.unit}</div>
+              </div>
+            ))}
+          </Sec>
+          <button onClick={submitMeasure} style={{width:"100%",padding:"15px",marginTop:6,background:C.navy,border:`2px solid ${C.navy}`,borderRadius:14,cursor:"pointer",fontSize:15,letterSpacing:"0.12em",color:"#fff",fontFamily:"'Fredoka',sans-serif",fontWeight:"600",boxShadow:C.shadow}}>
+            {saved?"✓ 保存しました！🎉":"保存する ▶"}
+          </button>
+          {data.measurements.length>0&&(()=>{
+            const lat=[...data.measurements].sort((a,b)=>b.date.localeCompare(a.date))[0];
+            return <div style={{marginTop:22}}>
+              <div style={{fontSize:11,letterSpacing:"0.14em",color:C.textMid,marginBottom:10,fontWeight:900}}>📋 LATEST RECORD</div>
+              <div style={{background:C.bgCard,border:`2px solid ${C.border}`,borderRadius:16,padding:"14px 16px",boxShadow:C.shadowSm}}>
+                <div style={{fontSize:11,color:C.textMid,fontWeight:800,marginBottom:10}}>{lat.date}</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  {[["体重",lat.weight,"kg",C.coral],["ウエスト",lat.waist,"cm",C.navy],["バスト",lat.bust,"cm",C.mint],["ヒップ",lat.hip,"cm",C.amber]].map(([lbl,val,unit,col])=>val?<div key={lbl} style={{textAlign:"center",background:C.bgCardAlt,borderRadius:12,padding:"11px 6px",border:`2px solid ${C.border}`}}>
+                    <div style={{fontSize:22,fontWeight:900,fontFamily:"'Fredoka',sans-serif",color:col}}>{val}<span style={{fontSize:12,fontWeight:700}}>{unit}</span></div>
+                    <div style={{fontSize:10,color:C.textMid,marginTop:3,fontWeight:800}}>{lbl}</div>
+                  </div>:null)}
+                </div>
+              </div>
+            </div>;
+          })()}
+        </div>}
+
+        {/* GRAPHS */}
+        {tab==="graphs"&&<div style={{padding:"0 20px",animation:"slideUp 0.3s ease"}}>
+          <div style={{background:C.bgCard,border:`2px solid ${C.border}`,borderRadius:16,padding:"16px",marginBottom:14,boxShadow:C.shadowSm}}>
+            <div style={{fontSize:13,color:C.navy,fontFamily:"'Fredoka',sans-serif",fontWeight:700,marginBottom:6}}>👟 歩数 — 直近30日</div>
+            <div style={{fontSize:11,color:C.textDim,marginBottom:10,fontWeight:700}}>濃紺=目標達成　薄紺=未達成　点線={STEP_GOAL.toLocaleString()}歩</div>
+            <canvas ref={stepsCanvasRef} width={400} height={90} style={{width:"100%",height:90}}/>
+          </div>
+          <div style={{background:C.bgCard,border:`2px solid ${C.border}`,borderRadius:16,padding:"16px",marginBottom:14,boxShadow:C.shadowSm}}>
+            <div style={{fontSize:13,color:C.navy,fontFamily:"'Fredoka',sans-serif",fontWeight:700,marginBottom:6}}>🏃 運動ログ — 直近30日</div>
+            <div style={{fontSize:11,color:C.textDim,marginBottom:10,fontWeight:700}}>Y=ヨガ　K=ケトルベル　P=プランク</div>
+            <canvas ref={canvasRef} width={400} height={80} style={{width:"100%",height:80}}/>
+          </div>
+          <div style={{background:C.bgCard,border:`2px solid ${C.border}`,borderRadius:16,padding:"16px",boxShadow:C.shadowSm}}>
+            <div style={{fontSize:13,color:C.navy,fontFamily:"'Fredoka',sans-serif",fontWeight:700,marginBottom:10}}>📉 ウエストの旅 (cm)</div>
+            <canvas ref={waistCanvasRef} width={400} height={155} style={{width:"100%",height:155}}/>
+            <div style={{fontSize:11,color:C.textDim,marginTop:8,textAlign:"right",fontWeight:700}}>点線 ★ = Cameron目標 58.5cm</div>
+          </div>
+        </div>}
+
+        {/* HISTORY */}
+        {tab==="history"&&<div style={{padding:"0 20px",animation:"slideUp 0.3s ease"}}>
+          {data.logs.length===0
+            ?<div style={{textAlign:"center",padding:"48px 0"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><div style={{color:C.textMid,fontSize:14,fontWeight:800}}>まだ記録がありません</div><div style={{color:C.textFaint,fontSize:12,marginTop:4,fontWeight:600}}>「記録する」タブから始めよう！</div></div>
+            :[...data.logs].sort((a,b)=>b.date.localeCompare(a.date)).map(log=>(
+              <div key={log.id} style={{background:C.bgCard,border:`2px solid ${C.border}`,borderRadius:14,padding:"13px 15px",marginBottom:10,boxShadow:C.shadowSm}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:14,fontWeight:900,fontFamily:"'Fredoka',sans-serif",color:C.navy}}>{log.date}</span>
+                    {log.steps&&<span style={{fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:99,background:parseInt(log.steps)>=STEP_GOAL?C.navy:C.bgCardAlt,color:parseInt(log.steps)>=STEP_GOAL?"#fff":C.textMid,border:`1.5px solid ${C.border}`}}>👟{parseInt(log.steps).toLocaleString()}</span>}
+                  </div>
+                  <span style={{fontSize:20}}>{"😔😐🙂😊🤩"[parseInt(log.mood)-1]||"🙂"}</span>
+                </div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {log.yoga&&<HTag>🧘 ヨガ</HTag>}
+                  {log.kettlebell&&<HTag>🏋️ ケトルベル</HTag>}
+                  {log.plank&&<HTag>🧱 プランク</HTag>}
+                  {log.abroller&&<HTag>⚙️ 腹筋ローラー</HTag>}
+                  {log.birddog&&<HTag>🐦 バードドッグ</HTag>}
+                  {log.protein&&<HTag>🥩 プロテイン</HTag>}
+                  {log.alcohol&&<HTag accent>{`🍷 ${log.alcoholType} ${log.alcoholCups}杯`}</HTag>}
+                </div>
+              </div>
+            ))
+          }
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+function Sec({title,children}){return <div style={{marginBottom:22}}><div style={{fontSize:12,fontFamily:"'Fredoka',sans-serif",fontWeight:600,color:"#1a3570",marginBottom:10}}>{title}</div>{children}</div>;}
+function Tog({label,sub,active,onToggle}){
+  return <button onClick={onToggle} className="tog-btn" style={{display:"flex",alignItems:"center",gap:11,padding:"11px 14px",cursor:"pointer",borderRadius:12,width:"100%",textAlign:"left",background:active?"#ddeaf8":"#f0e8d8",border:`2px solid ${active?"#0f1f4a":"#1a2e5a"}`,color:active?"#0f1f4a":"#1a3570",fontSize:13,fontWeight:active?"900":"700",transition:"all 0.18s"}}>
+    <span style={{width:20,height:20,borderRadius:"50%",flexShrink:0,background:active?"#0f1f4a":"#fff",border:`2.5px solid ${active?"#0f1f4a":"#1a2e5a"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:900,transition:"all 0.18s"}}>{active?"✓":""}</span>
+    <span style={{flex:1}}>{label}</span>
+    {sub&&<span style={{fontSize:10,fontWeight:800,color:active?"#0f1f4a":"#7a98bc",background:active?"rgba(15,31,74,0.10)":"#f0e8d8",padding:"2px 8px",borderRadius:20,flexShrink:0,border:`1px solid ${active?"#1a3570":"rgba(26,46,90,0.22)"}`}}>{sub}</span>}
+  </button>;
+}
+function HTag({children,accent}){
+  return <span style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:800,background:accent?"#fdeaee":"#cddff5",border:`1.5px solid ${accent?"#c0305a":"#1a3570"}`,color:accent?"#7a0e2a":"#0f1f4a"}}>{children}</span>;
+}
+function inp(){return{width:"100%",padding:"11px 13px",boxSizing:"border-box",background:"#fffef9",border:"2px solid #1a2e5a",borderRadius:10,color:"#0a1628",fontSize:14,fontWeight:"700",outline:"none"};}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
